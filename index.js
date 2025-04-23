@@ -47,7 +47,9 @@ wppconnect
       ultimaQrBase64 = base64Qrimg;
       console.log(asciiQR);
     },
-    browserless: true,        // ESSENCIAL!
+    browserless: true,               // ativa modo sem browser
+    useChrome: false,                // garante que Puppeteer não tente usar Chrome
+    executablePath: '',              // impede que ele aponte pra qualquer navegador
     disableWelcome: true,
     disableSpins: true,
     popup: false,
