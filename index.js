@@ -47,14 +47,10 @@ wppconnect
       ultimaQrBase64 = base64Qrimg;
       console.log(asciiQR);
     },
-    // ESSENCIAIS para ambiente server como Railway:
-    browserArgs: ['--no-sandbox'],
-    headless: true,
-    useChrome: false,
-    executablePath: '', // <- força a não usar puppeteer
+    browserless: true,        // ESSENCIAL!
     disableWelcome: true,
     disableSpins: true,
-    popup: false
+    popup: false,
   })
   .then((client) => start(client))
   .catch((error) => console.error('Erro ao iniciar o bot:', error));
