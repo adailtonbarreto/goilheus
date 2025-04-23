@@ -44,18 +44,20 @@ wppconnect
   .create({
     session: 'go-ilheus',
     catchQR: (base64Qrimg, asciiQR) => {
-      // Guarda o base64 para /qr
       ultimaQrBase64 = base64Qrimg;
-      // Imprime o QR em ASCII nos logs
       console.log(asciiQR);
     },
+    browserWS: '',
+    browserArgs: ['--no-sandbox'],
     headless: true,
-    puppeteerOptions: {
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    }
+    disableWelcome: true,
+    disableSpins: true,
+    popup: false,
+    // ESSA LINHA É A CHAVE PARA FUNCIONAR NO RAILWAY
+    useChrome: false,
   })
-  .then(client => start(client))
-  .catch(error => console.error('Erro ao iniciar o bot:', error));
+  .then((client) => start(client))
+  .catch((error) => console.error('Erro ao iniciar o bot:', error));
 
 // 7) Função principal de recebimento de mensagens
 async function start(client) {
