@@ -1,22 +1,63 @@
+// index.js
+// 1) Imports e setup do Express
+const express = require('express');
 const wppconnect = require('@wppconnect-team/wppconnect');
 const axios = require('axios');
 const { getState, setState, clearState } = require('./state');
 
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Armazena o último QR gerado em base64
+let ultimaQrBase64 = null;
+
+// 2) Health-check para manter o container acordado
+app.get('/', (_req, res) => {
+  res.send('🤖 Bot GoIlheus está UP');
+});
+
+// 3) Rota para ver o QR Code no navegador
+app.get('/qr', (_req, res) => {
+  if (!ultimaQrBase64) {
+    return res.status(404).send('QR ainda não gerado');
+  }
+  res.send(`
+    <html>
+      <body style="display:flex;justify-content:center;align-items:center;height:100vh">
+        <img src="${ultimaQrBase64}" style="max-width:90%;height:auto" />
+      </body>
+    </html>
+  `);
+});
+
+// 4) Inicia o servidor web
+app.listen(PORT, () => {
+  console.log(`⚡️ Webservice rodando em :${PORT}`);
+});
+
+// 5) Constantes do bot
 const CATEGORIAS_POR_PAGINA = 5;
 const API_URL = 'https://vilela24horas.com.br/api.php';
 
+// 6) Inicializa o WPPConnect
 wppconnect
   .create({
     session: 'go-ilheus',
-    catchQR: (base64Qrimg) => {
-      console.log('📸 Escaneie o QR Code no terminal para autenticar.');
+    catchQR: (base64Qrimg, asciiQR) => {
+      // Guarda o base64 para /qr
+      ultimaQrBase64 = base64Qrimg;
+      // Imprime o QR em ASCII nos logs
+      console.log(asciiQR);
     },
     headless: true,
-    puppeteerOptions: { args: ['--no-sandbox'] }
+    puppeteerOptions: {
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    }
   })
-  .then((client) => start(client))
-  .catch((error) => console.log('Erro ao iniciar o bot:', error));
+  .then(client => start(client))
+  .catch(error => console.error('Erro ao iniciar o bot:', error));
 
+// 7) Função principal de recebimento de mensagens
 async function start(client) {
   client.onMessage(async (message) => {
     const from = message.from;
@@ -25,13 +66,19 @@ async function start(client) {
 
     if (text === 'menu') {
       clearState(from);
-      await client.sendText(from, `👋 *Seja bem-vindo ao Go Ilhéus!* Seu guia mais completo de empresas da cidade.\n\nDigite:\n1️⃣ *Buscar empresa por nome*\n2️⃣ *Buscar por categorias*`);
+      await client.sendText(
+        from,
+        `👋 *Seja bem-vindo ao Go Ilhéus!* Seu guia mais completo de empresas da cidade.\n\nDigite:\n1️⃣ *Buscar empresa por nome*\n2️⃣ *Buscar por categorias*`
+      );
       setState(from, { step: 'menu' });
       return;
     }
 
     if (!state.step) {
-      await client.sendText(from, `👋 *Seja bem-vindo ao Go Ilhéus!* Seu guia mais completo de empresas da cidade.\n\nDigite:\n1️⃣ *Buscar empresa por nome*\n2️⃣ *Buscar por categorias*`);
+      await client.sendText(
+        from,
+        `👋 *Seja bem-vindo ao Go Ilhéus!* Seu guia mais completo de empresas da cidade.\n\nDigite:\n1️⃣ *Buscar empresa por nome*\n2️⃣ *Buscar por categorias*`
+      );
       setState(from, { step: 'menu' });
       return;
     }
@@ -55,17 +102,25 @@ async function start(client) {
 
         if (results.length > 0) {
           const lista = results.map((e, i) => `${i + 1}. ${e.nome}`).join('\n');
-          await client.sendText(from, `🔍 *Empresas encontradas:*\n\n${lista}\n\nDigite o número ou nome da empresa para ver os detalhes.`);
+          await client.sendText(
+            from,
+            `🔍 *Empresas encontradas:*\n\n${lista}\n\nDigite o número ou nome da empresa para ver os detalhes.`
+          );
           setState(from, { step: 'selecionarEmpresa', empresas: results });
         } else {
           const { data: cats } = await axios.get(API_URL, {
             params: { action: 'categorias' }
           });
 
-          const categoriasLimpa = cats.slice(0, CATEGORIAS_POR_PAGINA).map((c) => c.categoria);
+          const categoriasLimpa = cats
+            .slice(0, CATEGORIAS_POR_PAGINA)
+            .map((c) => c.categoria);
           const lista = categoriasLimpa.map((c, i) => `${i + 1}. ${c}`).join('\n');
 
-          await client.sendText(from, `⚠️ Nenhuma empresa encontrada com esse nome.\n\n📚 *Categorias disponíveis:*\n${lista}\n\nDigite o número ou nome de uma categoria para buscar por ela.`);
+          await client.sendText(
+            from,
+            `⚠️ Nenhuma empresa encontrada com esse nome.\n\n📚 *Categorias disponíveis:*\n${lista}\n\nDigite o número ou nome de uma categoria para buscar por ela.`
+          );
           setState(from, { step: 'categorias', categorias: categoriasLimpa });
         }
       } catch (err) {
@@ -95,7 +150,10 @@ async function start(client) {
 
           if (empresas.length > 0) {
             const lista = empresas.map((e, i) => `${i + 1}. ${e.nome}`).join('\n');
-            await client.sendText(from, `📦 *Empresas na categoria "${categoriaSelecionada}":*\n\n${lista}\n\nDigite o número ou nome da empresa para ver os detalhes.`);
+            await client.sendText(
+              from,
+              `📦 *Empresas na categoria "${categoriaSelecionada}":*\n\n${lista}\n\nDigite o número ou nome da empresa para ver os detalhes.`
+            );
             setState(from, { step: 'selecionarEmpresa', empresas });
           } else {
             await client.sendText(from, `❌ Nenhuma empresa encontrada nesta categoria.`);
@@ -106,7 +164,10 @@ async function start(client) {
           await client.sendText(from, '❌ Erro ao buscar empresas da categoria.');
         }
       } else {
-        await client.sendText(from, '❌ Categoria inválida. Digite o número ou nome exato da categoria listada.');
+        await client.sendText(
+          from,
+          '❌ Categoria inválida. Digite o número ou nome exato da categoria listada.'
+        );
       }
       return;
     }
@@ -128,21 +189,27 @@ async function start(client) {
       } else {
         await client.sendText(from, '❌ Empresa inválida. Digite o número ou nome exato da lista.');
       }
-
       return;
     }
   });
 }
 
+// 8) Função para mostrar categorias
 async function mostrarCategorias(client, from) {
   try {
     const { data: rows } = await axios.get(API_URL, {
       params: { action: 'categorias' }
     });
     const categorias = rows.map((r) => r.categoria);
-    const lista = categorias.slice(0, CATEGORIAS_POR_PAGINA).map((c, i) => `${i + 1}. ${c}`).join('\n');
+    const lista = categorias
+      .slice(0, CATEGORIAS_POR_PAGINA)
+      .map((c, i) => `${i + 1}. ${c}`)
+      .join('\n');
 
-    await client.sendText(from, `📚 *Categorias disponíveis:*\n${lista}\n\nDigite o número ou nome da categoria desejada.`);
+    await client.sendText(
+      from,
+      `📚 *Categorias disponíveis:*\n${lista}\n\nDigite o número ou nome da categoria desejada.`
+    );
     setState(from, { step: 'categorias', categorias: categorias.slice(0, CATEGORIAS_POR_PAGINA) });
   } catch (err) {
     console.error(err);
@@ -150,6 +217,7 @@ async function mostrarCategorias(client, from) {
   }
 }
 
+// 9) Função para enviar dados da empresa
 async function enviarDadosEmpresa(client, to, e) {
   const whatsapp = e.whatsapp ? `(https://wa.me/${e.whatsapp.replace(/\D/g, '')})` : 'Não informado';
   const instagram = e.instagram ? `(https://instagram.com/${e.instagram.replace('@', '')})` : 'Não informado';
